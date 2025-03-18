@@ -1,0 +1,474 @@
+
+# Seasonal forcing model
+
+
+
+## Overview
+
+Aim of this section:
+
+-   Illustrate the forcing model based on the book Modeling Infectious Diseases in Humans and Animals by Matt Keeling and Pejman Rohani[@keeling2008]
+
+-   Understanding the mechanisms that generate periodic outbreaks of childhood infectious diseases
+
+-   Use odin package to generate the model with time varying transmission rate.
+
+## Historical background
+
+Arthur Ransome settled on changes in the **density of susceptibles** as the most likely explanation for mechanisms that may generate regular epidemics of measles, whooping cough, and smallpox.
+
+Exanthematous diseases wipe out nearly all **susceptibles** and, as a consequence, must necessarily **wait a number of years** before the requisite nearness of susceptible individuals has been again secured.
+
+Case report data for measles, which conforms well to the assumptions of the SIR model, show **large amplitude** recurrent epidemics with very dramatic **peaks and troughs**.
+
+=\> This is in **direct contrast** to the **equilibrium dynamics** predicted by simple models, with a **steady incidence of disease**.
+
+![](img/sea_force/case.png)
+
+### Soper study
+
+Focusing on the monthly case reports for measles in Glasgow from 1905–1916, [@soper1929]proceeded to estimate relative transmission rates per month. His methodology centered on the argument that:
+
+$$\frac{cases\ this\ interval}{cases\ last\ interval} \sim \frac {Number\ of\ susceptibles\ now}{Equilibrium\ number\ of\ susceptibles'} $$ which can be expressed as the following equation:
+
+$$(\frac{C_{t+1}}{C_{t}})^{\alpha}=k_{\theta}\frac{X_{t+1}}{X^{*}}$$ Where:
+
+-   $\alpha$: realistic infection(the sum of the infectious and latent periods), $\alpha$ = 0.2
+
+-   $k_{0}$: the factor representing the influence of season $\theta$
+
+-   $X_{*}$: mean number of susceptibles, equivalent to 70 week's cases reports
+
+-   At the peak of an epidemic, $C_{t+1} \sim C_{t}$,we have an initial estimate for $X_{t+1}$, which can be updated by adding the documented births and subtracting the number of cases
+
+=\> All that remains now is to fit the seasonality parameter $k_{\theta}$
+
+![](img/sea_force/contact_parm.png)
+
+=\> **Estimated transmission was very low in the summer months, and peaked dramatically in the early autumn (October)**.
+
+### London and Yorke study
+
+[@london1973] interested in exploring seasonal influences on transmission, and estimated the mean monthly transmission rates for measles, mumps, and chickenpox in New York City from 1935 to 1972. Key concept:
+
+-   Number of susceptibles ($X_{p}$) has the same value at the peak of every outbreak
+
+-   The number of infectious individuals (Y) has reached its maximum, therefore $\frac{dY}{dt} = 0$
+
+$$\frac{dY}{dt} = 0 => \beta XY/N - \gamma Y = 0 => X=X_{p} = \frac{\gamma N}{\beta}$$
+
+At the start of the epidemic year, the number of susceptibles = $X_{p}$ + cumulative number of reported cases for that year.
+
+Then, by using a discrete-time model, they were able to explore the pattern of transmission rates that provided model exposures consistent with the observed case reports.
+
+=\> They also found a clearly **seasonal pattern** of transmission for all three diseases, with a **peak** that coincided with the **start of school terms** in the autumn and a **trough** that occurred during the **summer months**
+
+### More later studies
+
+Since then, more mechanistic approaches for the estimation of transmission rates have been developed, which involve a more detailed **“reconstruction” of the number of susceptibles** in the population.
+
+First [@fine1982] and later [@finkenstädt2000]used used **case report data** for measles in England and Wales, together with information on the **population size** and **birth rates** to estimate transmission rates.
+
+📌 **A range of statistical approaches have revealed that transmission of childhood infections varies seasonally, peaking at the start of the school year and declining significantly in the summer months.**
+
+## Modelling forcing in childhood infectious diseases: measles
+
+These studies started with the work of [@soper1929],[@bartlett1956], and [@bailey1975], who incorporated seasonality in SIR models with the primary aim of establishing the amplitude of variation in contact rates necessary to produce the observed 80% fluctuation in epidemics.
+
+It is often difficult to consider the forcing of childhood infections without considering age structured models. Throughout this chapter, age structure is ignored for simplicity
+
+[@bailey1975] explored a simplified SIR model:
+
+$$\frac{dX}{dt} =  \mu N - \beta(t) X Y/N $$
+
+$$\frac{dY}{dt} =  \beta(t) X Y/N - \gamma Y $$ where:
+
+-   $\mu$ is the per capita birth rate
+
+-   $\gamma$ is the recovery rate from the infection
+
+The transmission rate is a function of time, β(t), and was taken by Bailey to be a sinusoid:
+
+$$\beta(t) = \beta_{0}(1+\beta_{1}cos(\omega t))$$
+
+where:
+
+-   $\beta_{0}$: the baseline or average transmission rate
+
+-   $\omega$: the period of the forcing ($\frac {2 \pi}{time~unit}$,1 year = $\frac{2 \pi}{1}$)
+
+-   $\beta_{1}$: the amplitude of seasonality
+
+```{r,message=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+
+
+generate_omega_seq <- function(start = 1, end = 3, step = 0.5) {
+  time_units <- seq(start, end, by = step)
+  omega_seq <- (2 * 3.14) / time_units
+  return(omega_seq)
+}
+
+
+t = seq(0,5,le = 1001)
+
+beta_0 <- seq(0.5,5,by = .5)
+omega <- generate_omega_seq()
+beta_1 <- seq(0.5,5,by = .5)
+
+
+
+
+dt <- expand.grid(t,beta_0,omega,beta_1) 
+colnames(dt) <- c("t","beta_0","omega","beta_1")
+dt1 <- dt %>% mutate(beta = beta_0*(1 + beta_1*cos(omega*t)))
+
+ojs_define(data = dt1)
+```
+
+```{ojs}
+ojsdata = transpose(data)
+
+viewof beta_0 = Inputs.range(
+  [1, 5], 
+  {value: 1, step: 1, label: "beta_0"}
+)
+
+
+viewof omega = Inputs.radio(
+    [6.28, 4.1867, 3.1400, 2.5120, 2.0933], 
+    {value:6.28,label: "Omega"})
+
+viewof beta_1 = Inputs.range(
+  [0.5, 5], 
+  {value: 0.5, step: 0.5, label: "beta_1"}
+)
+
+ojsdata_filtered = ojsdata.filter(function(circle){
+  return circle.beta_0 == beta_0 & circle.beta_1 == beta_1 & circle.omega == omega})
+```
+
+```{ojs}
+Plot.plot({
+  y: {grid: true, label: "Beta"},
+  marks: [
+    Plot.lineY(ojsdata_filtered, {x: "t", y: "beta", stroke: "steelblue"}),
+    Plot.lineY(ojsdata_filtered, {x: "t", y: "beta_0", stroke: "red"})
+  ]
+})
+```
+
+To explore the dynamics of small perturbations to the unforced equilibrium, Bailey made substitutions $X = X∗(1 + x)$ and $Y = Y ∗(1 + y)$, after omitting some intermediate steps, gives a second order differential equation in the small infectious perturbation y:
+
+$$\frac{d^{2}y}{dt^{2}}+\mu R_{0} \frac{dy}{dt}+\mu \beta y = -\beta_{1} \omega \gamma sin(\omega t)$$
+
+The period of the oscillations is the same as the period of the forcing, the amplitude of oscillations (M):
+
+$$M = \beta_{1}\omega \gamma \{(\mu \beta_{0}-\omega^{2})^{2} + (\omega \mu R_{0})^{2}\}^{-\frac {1}{2}} $$
+
+Making the appropriate substitutions for measles, we set $\frac{1}{\gamma} = 2$, $\mu R_{0} \sim 0.014$ and $\omega = \frac{\pi}{26}$ (taking the week as our basic time unit) =\> $M \sim 7.76 \beta_{1}$ ( 10% variation in the transmission parameter translates into seasonal variations of 78% in case notifications)
+
+*Butterfly effect: "A butterfly flaps its wings in the Amazon rainforest, and subsequently a hurricane forms in Texas,"*
+
+📌 **Relatively modest levels of variation in the transmission rate can translate into large amplitude fluctuations in the observed disease incidence**
+
+### Dynamical Consequences of Seasonality: Harmonic and Subharmonic Resonance
+
+The first systematic examination of seasonality affecting the dynamical pattern of epidemics was made by Klaus Dietz. Dietz carried out a stability analysis of the familiar SIR model:
+
+$$\frac{dX}{dt} =  \mu N - (\beta(t) \frac {Y}{N} + \mu) X$$
+
+$$\frac{dY}{dt} =  \beta(t) X \frac {Y}{N} - (\mu + \gamma) Y $$
+
+where $\beta(t) = \beta_{0}(1-\beta_{1}cos(\omega t))$ ( he used a minus sign in his formulation in order to ensure that contact rates were at their lowest at the start of the epidemic year)
+
+```{r,echo=TRUE}
+curve(1*(1 - 0.5*cos(2*pi*time)), 0, 6,
+      n = 1001, xname = "time", xlab = "Time", ylab = "Transmission rate")
+```
+
+He demonstrated that in the absence of seasonal forcing, the system fluctuated with frequency F:
+
+$$F^{2} = \mu (\gamma + \mu)(R_{0}-1) - (\frac{\mu R_{0}}{2})^{2}$$
+
+in many realistic situation $\mu R_{0} \ll 1$. Dietz pointed out that for cases in which the natural period of oscillations in the SIR model are approximately the same as that of the seasonal forcing (i.e., F ≈ ω), we observe ***harmonic resonance***, where model dynamics mimic those of the forcing, although the amplitude of oscillations may be greatly increased.
+
+For different ratios of $\frac {\omega}{F}$, however, it is possible for forcing to excite sub-harmonic resonance that gives rise to oscillations with a longer period than the period of the forcing. This phenomenon can occur whenever the natural period of the oscillations $\frac {1}{F}$ is close to an *integer* multiple of the period of the forcing $\frac {1}{\omega}$
+
+![](img/sea_force/a.png)
+
+📌 **Forcing is most greatly amplified when the forcing period is close to the natural oscillatory frequency of the unforced dynamics.**
+
+### How the amplitude of seasonality affects dynamics
+
+Changes in either $R_{0}$ or $\beta_{1}$ can lead to qualitatively different epidemic patterns:
+
+-   Top left: $R_{0}$ is large, level of seasonal forcing is small =\> fraction of infecteds (small-amplitude annual epidemics)
+
+-   Middle left: $\beta_{1} = 0.1$ =\> we observe subharmonic resonance (as $\omega$ $\approx$ 2F), biennial dynamics
+
+-   Bottom left: a further increase in $\beta_{1}$ =\> four-year cycles
+
+-   Second and third columns: $R_{0}$ is smaller, increases in seasonal amplitude =\> do not influence the period of epidemics (remain annual), but alter the magnitude of oscillations
+
+![](img/sea_force/b.png)
+
+📌 **In the absence of seasonal forcing, the SIR family of models exhibit a stable equilibrium. The introduction of time-dependent transmission rates can generate a variety of dynamical patterns—depending on parameter values—ranging from simple annual epidemics to multiennial outbreaks and eventually chaos.**
+
+## Mechanisms of Multi-Annual Cycles
+
+The condition for growth of disease incidence is:
+
+$$\begin{align}
+\frac {dY}{dt} &= \beta X \frac {Y}{N} - (\gamma + \mu) Y > 0 \\
+&= Y (\gamma + \mu) (R_{0}\frac{X}{N}-1) >0   \\
+&\Rightarrow \frac{X}{N} >\frac{1}{R_{0}} \approx \frac{\gamma}{\beta} 
+\end{align}$$
+
+The spread only occur when a sufficient fraction of susceptible higher a critical value determined by $R_{0}$
+
+::: columns
+::: {.column width="60%"}
+![Top panel: solid line(weaker forcing used in middle graph), stronger forcing (dashed line used in lower graph)](img/sea_force/c.png)
+:::
+
+::: {.column width="40%"}
+-   point 1: The peak of disease incidence when $\frac{X}{N} < \frac{\gamma}{\beta(t)}$
+
+-   $\frac{X}{N}$ continue to decline until the rate of transmission is less than births
+
+-   point 2: $\frac{X}{N} > \frac{\gamma}{\beta(t)}$ disease incidence rises
+
+-   Bottom graph, the peak of incidence larger (due to larger beta =\> $\frac{X}{N}$ fall lower and take longer time to replenish the threshold)
+
+-   point 5: the transmission rate is very near its annual maximum (the threshold is near its minimum) =\> susceptibles do not remain enough to produce a large epidemic
+
+-   The entire process from point 4 to point 7 takes two years, representing subharmonic resonance
+:::
+:::
+
+📌 **The amplitude of seasonality increases =\> larger epidemics are generated (lower the level of susceptibles such that recovery to above the threshold takes far longer, resulting in longer period cycles)**
+
+::: columns
+::: {.column width="60%"}
+![](img/sea_force/d.png)
+:::
+
+::: {.column width="40%"}
+-   For $\beta > 0.0455$, we observed two dots =\> the dynamic are biennial and repeat every two years
+
+-   For $\beta > 0.3$, dynamics are largely chaotic with occasional “windows”
+:::
+:::
+
+## Forcing function
+
+We've explored seasonality by assuming that the transmission rate is time dependent and specifically is determined by a simple sinusoidal function, this view has changed in recent years:
+
+-   seasonally forced models of childhood infections now more often use a square wave
+
+-   the transmission rate is assumed to be high during school terms and low at other times
+
+$$\beta(t)=\beta_{0}(1+b_{1}Term(t))$$
+
+where:
+
+-   $Term(t)$ is +1 during the school term and −1 at other times.
+
+-   $b_{1}$ to represent the amplitude of seasonality
+
+| Holiday          | Model days | Calender dates          |
+|------------------|------------|-------------------------|
+| Chirstmas        | 356-6      | December 21 - January 6 |
+| Easter           | 100-115    | April 10-25             |
+| Summer           | 200-251    | July 19 - September 8   |
+| Autumn Half Term | 300-307    | October 27-November 3   |
+
+: Timings of the major school holidays when Term = −1; during all other times Term = +1. {#tbl-letters}
+
+We obtain 92 school holidays , 273 days of school =\> many more “+1” days than “−1” days =\> give rise to a mean transmission rate averaged over the year. To ensure R0 is constant irrespective of the precise forcing function used and the amplitude of seasonality. If there are $D+$ days of school and $D−$ holidays, then our forcing function would be:
+
+$$\beta(t)=\frac{\beta_{0}}{\frac{1}{365}((1+b_{1})D_{+}+(1-b_{1})D_{-})}(1+b_{1}Term(t))$$
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+
+library(odin2)
+library(dust2)
+library(tidyverse)
+library(latex2exp)
+
+beta_0 <- 1250
+beta_1 <- 0.25
+t <- seq(0,365,le = 1001)
+
+## sinusoidal function
+omega <- (2*pi)/365
+beta_sin_func <- data.frame(x = t,
+                            y = beta_0*(1 + beta_1*cos(omega*t)))
+
+## term time tranmission function
+
+schools_time <- c(0, 7, 100, 116, 200, 252, 300,308,356)
+schools_open <- c(-1, 1, -1, 1,   -1,   1,   -1, 1,-1)
+
+beta <- approx(
+  schools_time,
+  beta_0*(1 + beta_1*schools_open),
+  xout = t,
+  method = "constant",
+  rule = 2)
+
+## correct term time tranmission function
+mean_beta <- 1/365*((1+beta_1)*273+(1-beta_1)*92)
+
+beta_correct <- approx(
+  schools_time,
+  beta_0/mean_beta*(1 + beta_1*schools_open),
+  xout = t,
+  method = "constant",
+  rule = 2)
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 5
+#| out-width: "100%"
+
+ggplot() +
+  geom_line(data = as.data.frame(beta),
+            aes(x = x,y = y),lwd = 1,alpha = 0.5)+
+  geom_line(data = as.data.frame(beta_correct),
+            aes(x = x,y = y),lwd = 1,linetype = "dashed")+
+  geom_line(data = as.data.frame(beta_sin_func),
+            aes(x = x,y = y))+
+  scale_x_continuous(breaks = seq(0,365,by  = 50))+
+  scale_y_continuous(breaks = seq(800,1800,by  = 100),
+                     limits = c(800,1800))+
+  annotate("text", x = 50, y = 1700, label = "Winter Term")+
+  annotate("text", x = 160, y = 1700, label = "Spring Term")+
+  annotate("text", x = 300, y = 1700, label = "Autumn Term")+
+  annotate("text", x = 150, y = 1480, label = "Term time")+
+  annotate("segment", x = 150, y = 1500, xend = 150, yend = 1550,
+           arrow = arrow(type = "closed", length = unit(0.02, "npc")))+
+  annotate("text", x = 150, y = 1300, label = "Correct Term Time")+
+  annotate("segment", x = 150, y = 1320, xend = 150, yend = 1370,
+           arrow = arrow(type = "closed", length = unit(0.02, "npc")))+
+  annotate("text", x = 55, y = 1300, label = "Cosine")+
+  annotate("segment", x = 70, y = 1300, xend = 80, yend = 1300,
+           arrow = arrow(type = "closed", length = unit(0.02, "npc")))+
+  labs(x = "Time(years)",y = TeX(sprintf("Transmission rate $\\beta(t)$")))+
+  theme_classic() 
+```
+
+### Seasonal forcing model with odin2
+
+```{r,echo=TRUE,warning=FALSE,message=FALSE}
+
+schools_time <- c(0, 7, 100, 116, 200, 252, 300,308,356)
+schools_open <- c(-1, 1, -1, 1,   -1,   1,   -1, 1,-1)
+
+sis <- odin({
+    deriv(S) <- -beta * I * S / N + gamma * I
+    deriv(I) <-  beta * I * S / N - gamma * I
+    deriv(trans_rate) <-  beta 
+    
+    initial(S) <- N - I0
+    initial(I) <- I0
+    initial(trans_rate) <-  beta 
+    
+    I0 <- parameter(10)
+    N <- parameter(1000)
+    schools <- interpolate(schools_time, schools_open, "constant")
+    schools_time <- parameter(constant = TRUE)
+    schools_open <- parameter(constant = TRUE)
+    dim(schools_time, schools_open) <- parameter(rank = 1)
+    beta0 <- parameter(0.125)
+    beta_1 <- parameter(0.025)
+    beta <- beta0*(1 + beta_1*schools)
+    gamma <- 0.1
+})
+
+pars <- list(schools_time = schools_time, 
+             schools_open = schools_open,
+             beta0 = 0.125,
+             beta_1 = 0.25,
+             N = 5e6,
+             I0 = 100)
+sys <- dust_system_create(sis(), pars)
+
+dust_system_set_state_initial(sys)
+t <- seq(0, 600, length.out = 501)
+y <- dust_system_simulate(sys, t)
+y <- dust_unpack_state(sys, y)
+```
+
+::: columns
+::: {.column width="50%"}
+```{r}
+#| out-width: "100%"
+
+data.frame(time = t,S = y$S, I = y$I) %>% 
+  ggplot(aes(x = time)) +
+  geom_line(aes(y = I))+
+  theme_classic() +
+  scale_x_continuous(breaks = seq(0,600,by  = 45))+
+    annotate("rect",
+           ymin = -Inf, ymax = Inf,
+           xmin = c(0,100,200,300,356), xmax = c(6,115,251,307,365),
+           alpha = 0.2, fill = "red"
+  ) 
+```
+:::
+
+::: {.column width="50%"}
+```{r}
+#| out-width: "100%"
+
+data.frame(time = t,S = y$S, I = y$I,beta = y$trans_rate) %>% 
+  ggplot(aes(x = time)) +
+  geom_line(aes(y = beta))+
+  theme_classic() +
+  scale_x_continuous(breaks = seq(0,600,by  = 45))+
+    annotate("rect",
+           ymin = -Inf, ymax = Inf,
+           xmin = c(0,100,200,300,356), xmax = c(6,115,251,307,365),
+           alpha = 0.2, fill = "red"
+  ) 
+```
+:::
+:::
+
+### Compare 2 methods
+
+**The choice of functional form used to represent seasonality in the transmission term can have a substantial qualitative, as well as quantitative, dynamical effect**
+
+Two-dimensional bifurcation figures below show results using a fixed set of initial conditions tend to show more multiennial cycles.
+
+::: {layout-ncol="2"}
+![sinusoidal SEIR-force model](img/sea_force/bifur_sinu.png)
+
+![corrected term-time SEIR-force model](img/sea_force/bifur_term.png)
+:::
+
+-   With the mean transmission rate fixed at 1,250 per year, the bifurcation from annual to biennial epidemics occurs at a larger amplitude of seasonality for the term-time forcing ($b1 \sim 0.1285$ compared with $\beta_{1} \sim 0.0455$).
+
+-   The term-time forced models exhibit biennial epidemics for a far larger region of the parameter space with irregular (quasiperiodic or chaotic) outbreaks observed only once b1 exceeds approximately 0.6 (compared to $\beta_{1}$ \> 0.2)
+
+-   The sinusoidal-forced model generates very large amplitude dynamics with the proportion of infectives often falling below $10^{-20}$ when $\beta_{1}$ is large, term-time forcing the proportion of infectives in the troughs of epidemics always exceeds $10^{-10}$
+
+## Conclusion
+
+![Gray line: measles data and standard error, black-solid: sinusoidal, dotted line: corrected term forced model](img/sea_force/model_compare.png)
+
+| Seasonal forcing | Term time      | Sinusoidal        |
+|------------------|----------------|-------------------|
+| Best fit         | $b_{1} = 0.29$ | $beta_{1} = 0.11$ |
+| Associated error | $E_{v} = 1.18$ | $beta_{1} = 0.64$ |
+
+-   The best-fit model with **sinusoidal forcing** results in a lower error because it more accurately captures the timing of the epidemic peak.
+
+-   The best-fit model with **term-time forcing** generates an epidemic peak that is slightly delayed, even though it captures more of the qualitative properties of the **biennial cycle**.
+
+📌 This discrepancy highlights the need for extra biological detail: A more realistic distribution for the latent and infectious periods or including age structure greatly reduces the error associated with term-time forcing.
